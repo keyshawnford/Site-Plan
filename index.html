@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Site Yield Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: full-height drafting table. Map stage left, parameter sheet right; stacked on phones. */
+:root{
+  --bg:#f3f4f1; --panel:#fbfbf9; --ink:#1d2421; --muted:#5f6b66; --line:#d9ddd6;
+  --accent:#2160c4; --good:#1f7a43; --warn:#a56a00; --bad:#b3261e;
+  --paper:#e8eee5; --grid:#cfd9ca; --site:#d3e2cc; --road:#99a0a5; --lotline:#5b7d50;
+  --lotA:#b5d2a8; --lotB:#a9cfd0; --lotC:#d6cfa0;
+  --bldg:#f2d160; --bldgline:#9c7d14; --env:#2f6f3a; --handle:#2160c4; --chip:#ffffff;
+  --font-ui:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-num:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121614; --panel:#181d1b; --ink:#e6ebe8; --muted:#97a39d; --line:#2b332f;
+    --accent:#6ea6ff; --good:#58c487; --warn:#e3b04b; --bad:#ff7a70;
+    --paper:#141a17; --grid:#222b26; --site:#1d2b21; --road:#4b5257; --lotline:#6aa57a;
+    --lotA:#2f5b3a; --lotB:#28565a; --lotC:#5a5327;
+    --bldg:#e7c451; --bldgline:#f4de8a; --env:#8fd19b; --handle:#6ea6ff; --chip:#1e2421;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121614; --panel:#181d1b; --ink:#e6ebe8; --muted:#97a39d; --line:#2b332f;
+  --accent:#6ea6ff; --good:#58c487; --warn:#e3b04b; --bad:#ff7a70;
+  --paper:#141a17; --grid:#222b26; --site:#1d2b21; --road:#4b5257; --lotline:#6aa57a;
+  --lotA:#2f5b3a; --lotB:#28565a; --lotC:#5a5327;
+  --bldg:#e7c451; --bldgline:#f4de8a; --env:#8fd19b; --handle:#6ea6ff; --chip:#1e2421;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.4 var(--font-ui);-webkit-text-size-adjust:100%}
+.app{height:100%;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.top h1{margin:0;font-size:16px;font-weight:600;letter-spacing:.01em}
+.top .sub{color:var(--muted);font-size:12px}
+.top .actions{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.work{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 380px}
+.stage{position:relative;min-height:0;background:var(--paper);overflow:hidden}
+#map{width:100%;height:100%;display:block;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+#map:active{cursor:grabbing}
+.kpis{position:absolute;left:12px;bottom:12px;right:60px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+.kpi{background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:4px 9px;display:flex;flex-direction:column;min-width:64px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.kpi b{font:500 15px var(--font-num);font-variant-numeric:tabular-nums}
+.kpi span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kpi.pass b{color:var(--good)} .kpi.fail b{color:var(--bad)}
+.viewbtns{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:6px}
+.viewbtns button{width:38px;height:38px;padding:0;font-size:16px}
+.hint{position:absolute;left:12px;top:10px;font-size:11.5px;color:var(--muted);background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:3px 8px;pointer-events:none}
+.panel{min-height:0;overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:6px 0 24px}
+details{border-bottom:1px solid var(--line)}
+summary{list-style:none;cursor:pointer;padding:12px 16px;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;justify-content:space-between}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font:400 16px var(--font-num);color:var(--muted)}
+details[open] summary::after{content:"\2212"}
+summary:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sec{padding:0 16px 14px;display:flex;flex-direction:column;gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.field label{font-size:11.5px;color:var(--muted)}
+.inwrap{display:flex;align-items:center;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding-right:8px}
+.inwrap input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:500 14px var(--font-num);padding:7px 8px;font-variant-numeric:tabular-nums}
+.inwrap:focus-within{border-color:var(--accent)}
+.inwrap input:focus-visible{outline:none}
+.inwrap .u{font-size:11px;color:var(--muted)}
+input.txt{width:100%;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:13px var(--font-num);padding:7px 8px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;min-height:28px}
+.chk input{width:16px;height:16px;accent-color:var(--accent)}
+.sw{width:12px;height:12px;border-radius:2px;border:1px solid var(--line);display:inline-block}
+select,textarea{width:100%;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:13px var(--font-ui);padding:7px 8px}
+textarea{font:12px var(--font-num);min-height:84px;resize:vertical}
+button{font:500 12.5px var(--font-ui);border:1px solid var(--line);background:var(--chip);color:var(--ink);padding:7px 11px;border-radius:6px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.on{border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.55;cursor:default}
+a.btn{display:inline-block;font:500 12.5px var(--font-ui);border:1px solid var(--accent);color:var(--accent);padding:7px 11px;border-radius:6px;text-decoration:none}
+a{color:var(--accent)}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.note{font-size:11.5px;color:var(--muted)}
+.note b{color:var(--ink);font-weight:500}
+.sub2{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:6px}
+table.res{width:100%;border-collapse:collapse}
+table.res td{padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+table.res td:last-child{text-align:right;font:500 13px var(--font-num);font-variant-numeric:tabular-nums}
+.checks{display:flex;flex-direction:column;gap:6px}
+.check{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;font-size:13px}
+.pill{font:600 10.5px var(--font-ui);text-transform:uppercase;letter-spacing:.06em;border-radius:4px;padding:2px 6px;border:1px solid currentColor}
+.pill.pass{color:var(--good)} .pill.fail{color:var(--bad)} .pill.warn{color:var(--warn)}
+.check .v{font:12px var(--font-num);color:var(--muted);text-align:right}
+.banner{margin:8px 16px 0;padding:8px 10px;border:1px solid var(--warn);color:var(--warn);border-radius:6px;font-size:12.5px}
+@media (max-width:820px){
+  .work{grid-template-columns:1fr;grid-template-rows:minmax(280px,50%) minmax(0,1fr)}
+  .panel{border-left:0;border-top:1px solid var(--line)}
+  .hint{display:none}
+  .top .sub{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Site Yield Planner</h1>
+    <span class="sub">Parcel, zoning standards, roads, lots, units</span>
+    <div class="actions">
+      <button id="btn-copy">Copy scenario</button>
+      <button id="btn-svg">Save SVG</button>
+      <button id="btn-png">Save PNG</button>
+      <button id="btn-csv">Save lot table</button>
+    </div>
+  </header>
+  <main class="work">
+    <section class="stage">
+      <svg id="map" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Site plan"></svg>
+      <div class="hint">Drag blue corners to reshape the parcel. Drag empty space to pan, scroll or pinch to zoom.</div>
+      <div class="kpis" id="kpis"></div>
+      <div class="viewbtns">
+        <button id="zin" aria-label="Zoom in">+</button>
+        <button id="zout" aria-label="Zoom out">&minus;</button>
+        <button id="zfit" aria-label="Fit site" style="font-size:11px">Fit</button>
+      </div>
+    </section>
+    <aside class="panel" id="panel">
+      <div id="banner"></div>
+      <details open><summary>Results</summary>
+        <div class="sec">
+          <div class="row"><button class="primary" id="opt-go">Maximize units</button><span class="note" id="opt-msg">Tries street angles, lot depths and row offsets.</span></div>
+          <table class="res" id="res"></table>
+          <div class="checks" id="checks"></div>
+        </div>
+      </details>
+      <details open><summary>Parcel</summary>
+        <div class="sec">
+          <div class="note" id="pinfo"></div>
+          <div class="sub2">Import from GIS</div>
+          <div class="note">Load a GeoJSON or ArcGIS JSON file, or paste its text. Coordinates in longitude/latitude, Web Mercator or State Plane feet are converted to feet.</div>
+          <input type="file" id="gis-file" accept=".json,.geojson,.dxf,application/json,application/geo+json,text/plain">
+          <textarea id="paste" placeholder="Paste GeoJSON or ArcGIS JSON here. Or type corners, one &quot;x, y&quot; in feet per line."></textarea>
+          <div class="row"><button id="paste-go">Import</button>
+            <select id="units" style="width:auto" aria-label="Units for projected coordinates"><option value="ft">Projected units: feet</option><option value="m">Projected units: meters</option></select></div>
+          <div id="featbox" hidden>
+            <div class="field"><label for="featsel">Parcels found in the import</label><select id="featsel"></select></div>
+            <div class="row" style="margin-top:6px"><button id="feat-use">Use this parcel</button></div>
+          </div>
+          <div class="sub2">Look up a Tulare County parcel</div>
+          <div class="note">The page cannot call GIS servers itself. Build a query link here, open it, copy the text it returns, and paste it above.</div>
+          <div class="field"><label for="q-apn">APN (digits, dashes optional)</label><input class="txt" id="q-apn" placeholder="098-050-005" inputmode="text"></div>
+          <div class="field"><label for="q-ll">or a point on the parcel: latitude, longitude</label><input class="txt" id="q-ll" placeholder="36.3302, -119.2921"></div>
+          <div class="field"><label for="q-url">Layer query URL (swap in any ArcGIS parcel layer)</label><input class="txt" id="q-url"></div>
+          <div class="row"><a class="btn" id="q-link" target="_blank" rel="noopener" href="#">Open parcel query</a><span class="note" id="q-msg"></span></div>
+          <div class="sub2">Draw by hand</div>
+          <div class="field"><label for="shape">Shape</label>
+            <select id="shape">
+              <option value="tri">Triangle</option>
+              <option value="rect">Rectangle, 800 x 500 ft</option>
+              <option value="ell">L-shape (concave)</option>
+              <option value="pent">Pentagon</option>
+              <option value="dims">Enter dimensions...</option>
+              <option value="trace">Trace an uploaded site plan...</option>
+              <option value="file">Upload a shape file (GeoJSON, DXF)...</option>
+            </select></div>
+          <div id="pn-dims" hidden>
+            <div class="note">One side per line, in order around the parcel. Use a bearing and distance (<b>N 45 30 E 250.5</b>), or a distance and azimuth in degrees clockwise from north (<b>250.5, 45.5</b>). For a rectangle type <b>660 x 330</b>.</div>
+            <textarea id="dims" placeholder="N 0 0 E 330&#10;N 90 0 E 660&#10;S 0 0 E 330&#10;S 90 0 W 660"></textarea>
+            <div class="row"><button id="dims-go">Build parcel</button><span class="note" id="dims-msg"></span></div>
+          </div>
+          <div id="pn-trace" hidden>
+            <div class="note">1. Load an image of the site plan (a screenshot works for a PDF). 2. Type a distance you know from the plan, press Set scale, and tap its two ends. 3. Press Trace corners and tap each parcel corner in order, then Finish.</div>
+            <input type="file" id="tr-file" accept="image/*">
+            <div class="row"><div class="inwrap" style="flex:1"><input type="number" inputmode="decimal" id="tr-len" min="1" placeholder="Known distance" aria-label="Known distance in feet"><span class="u">ft</span></div><button id="tr-scale">Set scale</button></div>
+            <div class="row"><button id="tr-start">Trace corners</button><button id="tr-undo">Undo point</button><button class="primary" id="tr-done">Finish</button></div>
+            <div class="note" id="tr-msg"></div>
+          </div>
+          <div id="pn-file" hidden>
+            <div class="note">GeoJSON, ArcGIS JSON, or a DXF with the boundary drawn as a closed polyline. Set the projected units above for DXF drawings in meters.</div>
+            <input type="file" id="shape-file" accept=".json,.geojson,.dxf,application/json,text/plain">
+          </div>
+          <div class="row">
+            <button id="v-add">Add corner</button>
+            <button id="v-del">Delete selected corner</button>
+          </div>
+        </div>
+      </details>
+      <details open><summary>Zoning standards</summary>
+        <div class="sec">
+          <div class="field"><label for="district">Zone preset</label>
+            <select id="district">
+              <option value="custom">Custom</option>
+              <option value="v_r15">Visalia R-1-5</option>
+              <option value="v_r15s">Visalia R-1-5 with small lots (17.12.140)</option>
+              <option value="v_r1125">Visalia R-1-12.5</option>
+              <option value="v_r120">Visalia R-1-20</option>
+              <option value="v_rm2">Visalia R-M-2</option>
+              <option value="v_rm3">Visalia R-M-3</option>
+            </select></div>
+          <div class="note" id="codenote"></div>
+          <div class="grid2" id="f-zoning"></div>
+          <div class="note">Enter 0 for a limit that does not apply.</div>
+        </div>
+      </details>
+      <details open><summary>Lot types</summary>
+        <div class="sec">
+          <div class="row" id="ttabs"></div>
+          <div class="field"><label for="t-name">Name</label><input class="txt" id="t-name"></div>
+          <div class="grid2" id="f-type"></div>
+          <label class="chk"><input type="checkbox" id="t-attached"> Attached units (building fills lot width)</label>
+          <div class="note">Share sets the mix. A type with 0% share is off.</div>
+        </div>
+      </details>
+      <details open><summary>Streets and blocks</summary>
+        <div class="sec">
+          <div class="grid2" id="f-layout"></div>
+          <label class="chk"><input type="checkbox" id="c-interior"> Add interior streets</label>
+          <label class="chk"><input type="checkbox" id="c-drop"> Remove lots that break min area or width</label>
+        </div>
+      </details>
+      <details><summary>Building</summary>
+        <div class="sec">
+          <div class="grid2" id="f-building"></div>
+        </div>
+      </details>
+      <details><summary>Display</summary>
+        <div class="sec">
+          <label class="chk"><input type="checkbox" id="d-lots"> <span class="sw" style="background:var(--lotA)"></span><span class="sw" style="background:var(--lotB)"></span><span class="sw" style="background:var(--lotC)"></span> Lots by type</label>
+          <label class="chk"><input type="checkbox" id="d-bldg"> <span class="sw" style="background:var(--bldg)"></span> Buildings</label>
+          <label class="chk"><input type="checkbox" id="d-env"> <span class="sw" style="border-color:var(--env);border-style:dashed"></span> Setback envelopes</label>
+          <label class="chk"><input type="checkbox" id="d-dims"> Edge dimensions</label>
+        </div>
+      </details>
+      <details><summary>Background image</summary>
+        <div class="sec">
+          <div class="note">Load an aerial or survey image, then set its width in feet so the scale matches.</div>
+          <input type="file" id="bg-file" accept="image/*">
+          <div class="grid2" id="f-bg"></div>
+          <div class="row"><button id="bg-clear">Remove image</button></div>
+        </div>
+      </details>
+      <details><summary>Load a saved scenario</summary>
+        <div class="sec">
+          <textarea id="scn" placeholder="Paste scenario JSON from Copy scenario"></textarea>
+          <div class="row"><button id="scn-go">Load scenario</button></div>
+        </div>
+      </details>
+    </aside>
+  </main>
+</div>
+
+<script src="vendor/clipper.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var CL=window.ClipperLib,SC=100;
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+/* ---------- geometry (feet) ---------- */
+function area2(p){var a=0,i,q;for(i=0;i<p.length;i++){q=p[(i+1)%p.length];a+=p[i][0]*q[1]-q[0]*p[i][1]}return a/2}
+function polyArea(p){return p.length<3?0:Math.abs(area2(p))}
+function ccw(p){return area2(p)<0?p.slice().reverse():p}
+function clipHalf(poly,nx,ny,c){
+  var out=[],n=poly.length,i,a,b,fa,fb,t;
+  for(i=0;i<n;i++){
+    a=poly[i];b=poly[(i+1)%n];
+    fa=nx*a[0]+ny*a[1]-c;fb=nx*b[0]+ny*b[1]-c;
+    if(fa>=0)out.push(a);
+    if((fa>=0)!==(fb>=0)){t=fa/(fa-fb);out.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t])}
+  }
+  return out;
+}
+function edgeNormal(a,b){var dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1;return{L:L,ex:dx/L,ey:dy/L,nx:-dy/L,ny:dx/L}}
+function offsetConvex(poly,d){
+  var cur=poly,n=poly.length,i,a,b,e;
+  for(i=0;i<n&&cur.length>=3;i++){a=poly[i];b=poly[(i+1)%n];e=edgeNormal(a,b);cur=clipHalf(cur,e.nx,e.ny,e.nx*a[0]+e.ny*a[1]+d)}
+  return cur.length>=3?cur:[];
+}
+function clipConvex(subject,clip){
+  var cur=subject,n=clip.length,i,a,b,e;
+  for(i=0;i<n&&cur.length>=3;i++){a=clip[i];b=clip[(i+1)%n];e=edgeNormal(a,b);cur=clipHalf(cur,e.nx,e.ny,e.nx*a[0]+e.ny*a[1])}
+  return cur.length>=3?cur:[];
+}
+function isConvex(p){
+  var n=p.length,s=0,i,a,b,c,z;
+  for(i=0;i<n;i++){a=p[i];b=p[(i+1)%n];c=p[(i+2)%n];
+    z=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);
+    if(Math.abs(z)<1e-6)continue;
+    if(s===0)s=z>0?1:-1;else if((z>0?1:-1)!==s)return false}
+  return true;
+}
+function pip(pt,poly){
+  var x=pt[0],y=pt[1],inside=false,i,j,n=poly.length;
+  for(i=0,j=n-1;i<n;j=i++){
+    var xi=poly[i][0],yi=poly[i][1],xj=poly[j][0],yj=poly[j][1];
+    if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)inside=!inside;
+  }
+  return inside;
+}
+function mk(fr,u,v){return[fr.ox+fr.ux*u+fr.vx*v,fr.oy+fr.uy*u+fr.vy*v]}
+function rectW(fr,u0,u1,v0,v1){return[mk(fr,u0,v0),mk(fr,u1,v0),mk(fr,u1,v1),mk(fr,u0,v1)]}
+function toLocal(fr,p){var dx=p[0]-fr.ox,dy=p[1]-fr.oy;return[dx*fr.ux+dy*fr.uy,dx*fr.vx+dy*fr.vy]}
+function ext(fr,pts){var a=1e12,b=-1e12,c=1e12,d=-1e12,k,l;for(k=0;k<pts.length;k++){l=toLocal(fr,pts[k]);a=Math.min(a,l[0]);b=Math.max(b,l[0]);c=Math.min(c,l[1]);d=Math.max(d,l[1])}return{u0:a,u1:b,v0:c,v1:d}}
+
+/* Clipper wrappers. C-paths are arrays of {X,Y} scaled by SC. */
+function toC(p){return p.map(function(q){return{X:Math.round(q[0]*SC),Y:Math.round(q[1]*SC)}})}
+function fromC(p){return p.map(function(q){return[q.X/SC,q.Y/SC]})}
+function offC(paths,d,round){
+  if(!paths.length)return[];
+  var co=new CL.ClipperOffset(12,0.2*SC),out=new CL.Paths();
+  co.AddPaths(paths,round?CL.JoinType.jtRound:CL.JoinType.jtMiter,CL.EndType.etClosedPolygon);
+  co.Execute(out,d*SC);return out;
+}
+function boolC(subj,clip,type){
+  var c=new CL.Clipper(),out=new CL.Paths();
+  c.AddPaths(subj,CL.PolyType.ptSubject,true);c.AddPaths(clip,CL.PolyType.ptClip,true);
+  c.Execute(type,out,CL.PolyFillType.pftNonZero,CL.PolyFillType.pftNonZero);return out;
+}
+function areaC(paths){var a=0;paths.forEach(function(p){a+=CL.Clipper.Area(p)});return Math.abs(a)/(SC*SC)}
+function outers(paths){return paths.filter(function(p){return CL.Clipper.Orientation(p)})}
+function largest(paths){
+  var best=null,ba=0;
+  paths.forEach(function(p){var a=CL.Clipper.Area(p);if(a>ba){ba=a;best=p}});
+  return best;
+}
+function orientC(p){if(!CL.Clipper.Orientation(p))p.reverse();return p}
+
+/* ---------- state ---------- */
+var SHAPES={
+  tri:[[220,0],[0,850],[760,850]],
+  rect:[[0,0],[800,0],[800,500],[0,500]],
+  ell:[[0,0],[520,0],[520,380],[900,380],[900,820],[0,820]],
+  pent:[[200,0],[700,120],[820,560],[350,700],[0,420]]
+};
+function T0(o){return Object.assign({name:'Type',share:0,lotW:50,minArea:5000,minW:50,front:22,rear:25,bw:40,bd:45,upb:1,attached:false},o)}
+var DEFAULTS={
+  side:5,streetSide:10,maxCov:0,maxFAR:0,maxH:35,maxStories:0,minDens:2,maxDens:10,sapu:0,minOpen:0,parking:2,smallArea:0,smallCap:0,
+  lotD:100,row:60,radius:45,angle:0,phase:0,cornerExtra:10,interior:true,dropBad:true,
+  stories:2,storyH:10,
+  dLots:true,dBldg:true,dEnv:false,dDims:true,
+  bgW:800,bgX:0,bgY:0,bgO:60,
+  zone:'v_r15',
+  types:[T0({name:'Standard 50 ft',share:100}),T0({name:'Type B'}),T0({name:'Type C'})]
+};
+var ZONES={
+  v_r15:{note:'<b>VMC 17.12.050 to .110.</b> 5,000 sf minimum, 50 ft interior and 60 ft corner width, front 15 ft to living space and 22 ft to a front-loading garage (22 ft used here), sides 5 ft, street side 10 ft, rear 25 ft, height 35 ft. Density uses the Low Density Residential range of 2 to 10 units per gross acre. Parking 2 per unit (17.34.020). No lot coverage or FAR limit was found in the chapter, so both are off.',
+    P:{side:5,streetSide:10,maxCov:0,maxFAR:0,maxH:35,maxStories:0,minDens:2,maxDens:10,sapu:0,minOpen:0,parking:2,smallArea:0,smallCap:0,lotD:100,cornerExtra:10,stories:2},
+    types:[T0({name:'Standard 50 ft',share:100}),T0({name:'Type B'}),T0({name:'Type C'})]},
+  v_r15s:{note:'<b>VMC 17.12.140.</b> Lots of 3,600 to 4,999 sf are allowed when they are 50% or less of the lots in the map and density stays within 2 to 10 units per gross acre. Small-lot standards: 46 ft interior and 51 ft corner width, 70 ft depth, front 12 ft living and 20 ft garage (20 ft used), rear 15 ft, sides 5 ft, street side 10 ft. The floor-plan, elevation and design-standard requirements are not modeled.',
+    P:{side:5,streetSide:10,maxCov:0,maxFAR:0,maxH:35,maxStories:0,minDens:2,maxDens:10,sapu:0,minOpen:0,parking:2,smallArea:5000,smallCap:50,lotD:100,cornerExtra:10,stories:2},
+    types:[T0({name:'Standard 50 ft',share:55}),T0({name:'Small 46 ft',share:45,lotW:46,minArea:3600,minW:46,front:20,rear:15,bw:36,bd:50}),T0({name:'Type C'})]},
+  v_r1125:{note:'<b>VMC 17.12.050 to .110.</b> 12,500 sf minimum, 90 ft interior and 100 ft corner width, front 30 ft, sides 5 ft, street side 10 ft, rear 25 ft, height 35 ft. No density range is applied.',
+    P:{side:5,streetSide:10,maxCov:0,maxFAR:0,maxH:35,maxStories:0,minDens:0,maxDens:0,sapu:0,minOpen:0,parking:2,smallArea:0,smallCap:0,lotD:140,cornerExtra:10,stories:2},
+    types:[T0({name:'Estate 90 ft',share:100,lotW:90,minArea:12500,minW:90,front:30,rear:25,bw:65,bd:60}),T0({name:'Type B'}),T0({name:'Type C'})]},
+  v_r120:{note:'<b>VMC 17.12.050 to .110.</b> 20,000 sf minimum, 100 ft interior and 110 ft corner width, front 35 ft, sides 10 ft, street side 20 ft, rear 25 ft, height 35 ft. No density range is applied.',
+    P:{side:10,streetSide:20,maxCov:0,maxFAR:0,maxH:35,maxStories:0,minDens:0,maxDens:0,sapu:0,minOpen:0,parking:2,smallArea:0,smallCap:0,lotD:200,cornerExtra:10,stories:2},
+    types:[T0({name:'Estate 100 ft',share:100,lotW:100,minArea:20000,minW:100,front:35,rear:25,bw:70,bd:70}),T0({name:'Type B'}),T0({name:'Type C'})]},
+  v_rm2:{note:'<b>VMC 17.16.050 to .150.</b> 6,000 sf minimum site, 3,000 sf of site area per unit, front 15 ft, sides 5 ft, street side 10 ft, rear 25 ft, height 35 ft or 3 stories, 5% open space, density 10 to 15 units per acre, parking 1.5 per unit (17.34.020). This models duplex lots on public streets. A single apartment site with drive aisles and parking lots is not modeled.',
+    P:{side:5,streetSide:10,maxCov:0,maxFAR:0,maxH:35,maxStories:3,minDens:10,maxDens:15,sapu:3000,minOpen:5,parking:1.5,smallArea:0,smallCap:0,lotD:100,cornerExtra:0,stories:2},
+    types:[T0({name:'Duplex lot 60 ft',share:100,lotW:60,minArea:6000,minW:0,front:15,rear:25,bw:50,bd:55,upb:2}),T0({name:'Type B'}),T0({name:'Type C'})]},
+  v_rm3:{note:'<b>VMC 17.16.050 to .150.</b> 6,000 sf minimum site, 1,200 sf of site area per unit, front 15 ft, sides 5 ft, street side 10 ft, rear 15 ft, 4 stories, 5% open space, up to 35 units per gross acre, parking 1.5 per unit. This models small apartment buildings on separate lots. A single apartment site with drive aisles and parking lots is not modeled, and surface parking is not drawn.',
+    P:{side:5,streetSide:10,maxCov:0,maxFAR:0,maxH:0,maxStories:4,minDens:15,maxDens:35,sapu:1200,minOpen:5,parking:1.5,smallArea:0,smallCap:0,lotD:120,cornerExtra:0,stories:3},
+    types:[T0({name:'Apartment lot 100 ft',share:100,lotW:100,minArea:6000,minW:0,front:15,rear:15,bw:90,bd:85,upb:10}),T0({name:'Type B'}),T0({name:'Type C'})]}
+};
+var CODE_LINK=' Check every number against the <a href="https://codelibrary.amlegal.com/codes/visalia/latest/visalia_ca/0-0-0-33583" target="_blank" rel="noopener">adopted Visalia code</a>. Street width and corner radius are your inputs, so confirm them with City engineering standards.';
+function clone(o){return JSON.parse(JSON.stringify(o))}
+var P=clone(DEFAULTS);
+var site=SHAPES.tri.map(function(p){return p.slice()});
+var mode=null,tpts=[],sel=-1,vb={x:0,y:0,w:900,h:700},bg=null,model=null,curT=0,parcelMeta='',feats=[];
+function normP(o){
+  var r=Object.assign(clone(DEFAULTS),o||{});
+  if(!Array.isArray(r.types)||!r.types.length)r.types=clone(DEFAULTS.types);
+  r.types=r.types.slice(0,3).map(function(t){return T0(t)});
+  while(r.types.length<3)r.types.push(T0({name:'Type '+'ABC'[r.types.length]}));
+  return r;
+}
+try{
+  var saved=JSON.parse(localStorage.getItem('syp2-state')||'null');
+  if(saved&&saved.P&&saved.site&&saved.site.length>=3){P=normP(saved.P);site=saved.site;parcelMeta=saved.meta||''}
+}catch(e){}
+
+/* ---------- layout engine ---------- */
+function longestEdgeAngle(poly){
+  var best=0,ang=0,i,a,b,L;
+  for(i=0;i<poly.length;i++){a=poly[i];b=poly[(i+1)%poly.length];L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L>best){best=L;ang=Math.atan2(b[1]-a[1],b[0]-a[0])}}
+  return ang;
+}
+function generate(siteIn,p){
+  var out={S:siteIn,lots:[],roadRings:[],streets:[],removed:0,warn:[],roadArea:0,siteArea:polyArea(siteIn)};
+  var T=p.types,active=[],i;
+  T.forEach(function(t,k){if(t.share>0&&t.lotW>=10)active.push(k)});
+  if(!active.length){out.warn.push('Every lot type has 0% share. Give at least one type a share.');return out}
+  var shareSum=active.reduce(function(s,k){return s+T[k].share},0),counts={},total=0,minLotW=1e9;
+  active.forEach(function(k){counts[k]=0;minLotW=Math.min(minLotW,T[k].lotW)});
+  function pick(maxW){
+    var best=-1,bs=-1e9;
+    active.forEach(function(k){if(T[k].lotW>maxW)return;var s=T[k].share/shareSum*(total+1)-counts[k];if(s>bs){bs=s;best=k}});
+    return best;
+  }
+  function fill(L,corner){
+    var seq=[],used=0,extra=corner?p.cornerExtra:0,room=L-2*extra,k;
+    while((k=pick(room-used))>=0){seq.push({t:k,w:T[k].lotW});used+=T[k].lotW;counts[k]++;total++}
+    if(!seq.length)return seq;
+    if(extra&&seq.length>=2){seq[0].w+=extra;seq[seq.length-1].w+=extra;used+=2*extra;seq[0].cLo=true;seq[seq.length-1].cHi=true}
+    var f=L/used;seq.forEach(function(s){s.w*=f});
+    return seq;
+  }
+  /* clean site */
+  var sp=CL.Clipper.SimplifyPolygon(orientC(toC(siteIn)),CL.PolyFillType.pftNonZero),Sc=largest(sp);
+  if(!Sc||sp.length>1)out.warn.push('The parcel outline crosses itself. The largest piece is used.');
+  if(!Sc)return out;
+  var S=ccw(fromC(Sc));out.S=S;out.siteArea=polyArea(S);
+  var D=p.lotD,R=p.row,rad=Math.max(0,p.radius),n=S.length;
+  var C=offC([Sc],-(D+R/2),false),Cr=C;
+  if(!C.length){out.warn.push('The parcel is too small for a loop street at this lot depth. Reduce lot depth or street width.');return out}
+  if(rad>0){var op=offC(offC(C,-rad,false),rad,true);if(op.length)Cr=op}
+  var roadOuter=offC(Cr,R/2,true),roadInner=offC(Cr,-R/2,true);
+  var ring=boolC(roadOuter,roadInner,CL.ClipType.ctDifference);
+  ring=boolC(ring,[Sc],CL.ClipType.ctIntersection);
+  out.roadRings=ring.map(fromC);out.roadArea=areaC(ring);
+  var band=boolC([Sc],roadOuter,CL.ClipType.ctDifference);
+  var lotId=0;
+  var roadOutP=outers(roadOuter).map(fromC),roadInP=outers(roadInner).map(fromC);
+  function onRoad(q){
+    var k,inO=false;
+    for(k=0;k<roadOutP.length;k++)if(pip(q,roadOutP[k])){inO=true;break}
+    if(!inO)return false;
+    for(k=0;k<roadInP.length;k++)if(pip(q,roadInP[k]))return false;
+    return true;
+  }
+  function addLot(rect,region,fr,front,t,flags){
+    var res=boolC([orientC(toC(rect))],region,CL.ClipType.ctIntersection),big=largest(res);
+    if(!big)return null;
+    var pts=ccw(fromC(big)),a=polyArea(pts),ty=T[t];
+    if(a<0.3*ty.lotW*D)return null;
+    var e=ext(fr,pts),width=e.u1-e.u0;
+    if(flags.kind==='perimeter'&&!onRoad(mk(fr,(e.u0+e.u1)/2,e.v1+3)))return null;
+    var ok=a>=ty.minArea-0.5&&width>=ty.minW-0.05;
+    if(!ok&&p.dropBad){out.removed++;return null}
+    out.lots.push({id:++lotId,pts:pts,fr:fr,front:front,t:t,kind:flags.kind,cLo:!!flags.cLo,cHi:!!flags.cHi,area:a,width:width,ok:ok,
+      uMin:e.u0,uMax:e.u1,vMin:e.v0,vMax:e.v1});
+    return big;
+  }
+  /* perimeter lots face the loop street; longer edges get the corners */
+  var nm=S.map(function(a,k){return edgeNormal(a,S[(k+1)%n])});
+  var order=nm.map(function(e,k){return k}).sort(function(a,b){return nm[b].L-nm[a].L});
+  order.forEach(function(i){
+    var A=S[i],cur=nm[i];
+    if(cur.L<minLotW)return;
+    var fr={ox:A[0],oy:A[1],ux:cur.ex,uy:cur.ey,vx:cur.nx,vy:cur.ny};
+    var seq=fill(cur.L,false),u=0,made=[];
+    seq.forEach(function(s){
+      var c=addLot(rectW(fr,u,u+s.w,0,D+rad+R),band,fr,'hi',s.t,{kind:'perimeter'});u+=s.w;
+      if(c)made.push(c);
+    });
+    if(made.length)band=boolC(band,made,CL.ClipType.ctDifference);
+  });
+  /* interior blocks: back-to-back rows with streets between */
+  var th=longestEdgeAngle(S)+p.angle*Math.PI/180;
+  outers(roadInner).forEach(function(Ic){
+    var Ip=fromC(Ic);
+    if(polyArea(Ip)<0.5*minLotW*D)return;
+    if(!p.interior)return;
+    var cx=0,cy=0;Ip.forEach(function(q){cx+=q[0];cy+=q[1]});cx/=Ip.length;cy/=Ip.length;
+    var f2={ox:cx,oy:cy,ux:Math.cos(th),uy:Math.sin(th),vx:-Math.sin(th),vy:Math.cos(th)},E=ext(f2,Ip),per=2*D+R;
+    function row(v0,v1,front){
+      if(v1<=E.v0||v0>=E.v1)return;
+      var strip=boolC([orientC(toC(rectW(f2,E.u0-5,E.u1+5,v0,v1)))],[Ic],CL.ClipType.ctIntersection);
+      outers(strip).forEach(function(sc){
+        var se=ext(f2,fromC(sc)),seq=fill(se.u1-se.u0,true),u=se.u0;
+        seq.forEach(function(s){addLot(rectW(f2,u,u+s.w,v0,v1),[sc],f2,front,s.t,{kind:'interior',cLo:s.cLo,cHi:s.cHi});u+=s.w});
+      });
+    }
+    var ph=((p.phase%100)+100)%100/100,s0=E.v0-ph*per,s;
+    for(s=s0;s<E.v1;s+=per){
+      row(s,s+D,'lo');row(s+D,s+2*D,'hi');
+      if(s+2*D<E.v1){
+        var st=boolC([orientC(toC(rectW(f2,E.u0-5,E.u1+5,s+2*D,s+2*D+R)))],[Ic],CL.ClipType.ctIntersection);
+        st.forEach(function(q){out.streets.push(fromC(q))});out.roadArea+=areaC(st);
+      }
+    }
+  });
+  return out;
+}
+
+function intersectPoly(a,rect){
+  if(!a.length)return[];
+  if(isConvex(a))return clipConvex(rect,ccw(a));
+  var r=largest(boolC([orientC(toC(a))],[orientC(toC(rect))],CL.ClipType.ctIntersection));
+  return r?ccw(fromC(r)):[];
+}
+function inset(pts,d){
+  if(d<=0)return pts;
+  if(isConvex(pts))return offsetConvex(pts,d);
+  var r=largest(offC([orientC(toC(pts))],-d,false));
+  return r?ccw(fromC(r)):[];
+}
+function placeBuilding(lot,p,eff){
+  var t=p.types[lot.t],fr=lot.fr,side=t.attached?0:p.side;
+  var sLo=lot.cLo?Math.max(side,p.streetSide):side,sHi=lot.cHi?Math.max(side,p.streetSide):side;
+  var hi=lot.front==='hi',fv=hi?lot.vMax-t.front:lot.vMin+t.front,rv=hi?lot.vMin+t.rear:lot.vMax-t.rear;
+  var avail=hi?fv-rv:rv-fv;
+  if(avail<15)return{ok:false,reason:'setbacks'};
+  var E=intersectPoly(inset(lot.pts,side),rectW(fr,lot.uMin+sLo,lot.uMax-sHi,Math.min(fv,rv),Math.max(fv,rv)));
+  if(E.length<3)return{ok:false,reason:'setbacks'};
+  var ee=ext(fr,E),uc=(ee.u0+ee.u1)/2;
+  var bw=t.attached?ee.u1-ee.u0:Math.min(t.bw,ee.u1-ee.u0),bd=Math.min(t.bd,avail);
+  var A=lot.area,covCap=p.maxCov>0?p.maxCov/100*A:1e12,farCap=p.maxFAR>0?p.maxFAR*A/eff:1e12,allowed=Math.min(covCap,farCap),capped=null;
+  if(bw*bd>allowed){
+    capped=covCap<=farCap?'coverage':'FAR';bd=allowed/bw;
+    if(bd<20){bd=20;bw=allowed/bd}
+  }
+  if(bw<14)return{ok:false,reason:capped||'setbacks',env:E};
+  function fits(c){
+    var cx=(c[0][0]+c[2][0])/2,cy=(c[0][1]+c[2][1])/2,k,a,b,q;
+    for(k=0;k<4;k++){
+      a=c[k];b=c[(k+1)%4];
+      q=[a[0]+(cx-a[0])*0.01,a[1]+(cy-a[1])*0.01];if(!pip(q,E))return false;
+      q=[(a[0]+b[0])/2,(a[1]+b[1])/2];q=[q[0]+(cx-q[0])*0.01,q[1]+(cy-q[1])*0.01];if(!pip(q,E))return false;
+    }
+    return true;
+  }
+  var w,sh,c,v0,v1;
+  for(w=bw;w>=14;w-=2){
+    for(sh=0;sh<=avail-bd+0.01;sh+=4){
+      if(hi){v1=fv-sh;v0=v1-bd}else{v0=fv+sh;v1=v0+bd}
+      c=rectW(fr,uc-w/2,uc+w/2,v0,v1);
+      if(fits(c))return{ok:true,pts:c,fp:w*bd,capped:capped,env:E};
+    }
+  }
+  return{ok:false,reason:'setbacks',env:E};
+}
+
+function fmt(n,d){d=d||0;return Number(n).toLocaleString('en-US',{maximumFractionDigits:d,minimumFractionDigits:d})}
+function compute(){
+  var g=generate(site,P),warn=g.warn.slice(),T=P.types;
+  var eff=Math.max(1,Math.floor(P.stories)||1);
+  if(P.maxStories>0)eff=Math.min(eff,P.maxStories);
+  if(P.maxH>0)eff=Math.min(eff,Math.max(1,Math.floor(P.maxH/P.storyH)));
+  var m={units:0,lots:g.lots.length,fp:0,gfa:0,lotArea:0,capCov:0,capFar:0,noEnv:0,maxCov:0,nonOk:0,small:0,byType:[0,0,0],sapuCut:0};
+  g.lots.forEach(function(lot){
+    m.lotArea+=lot.area;if(!lot.ok)m.nonOk++;m.byType[lot.t]++;
+    if(P.smallArea>0&&lot.area<P.smallArea-0.5)m.small++;
+    var b=placeBuilding(lot,P,eff);
+    lot.env=b.env||null;lot.b=b.ok?b:null;lot.reason=b.ok?null:b.reason;lot.units=0;
+    if(b.ok){
+      var u=T[lot.t].upb;
+      if(P.sapu>0){var cap=Math.floor(lot.area/P.sapu+1e-6);if(cap<u){u=cap;m.sapuCut++}}
+      lot.units=Math.max(0,u);m.units+=lot.units;m.fp+=b.fp;m.gfa+=b.fp*eff;
+      m.maxCov=Math.max(m.maxCov,b.fp/lot.area);
+      if(b.capped==='coverage')m.capCov++;
+      if(b.capped==='FAR')m.capFar++;
+    }else m.noEnv++;
+  });
+  var siteArea=g.siteArea,open=Math.max(0,siteArea-m.lotArea-g.roadArea),ac=siteArea/43560;
+  m.siteArea=siteArea;m.ac=ac;m.roadArea=g.roadArea;m.open=open;
+  m.density=ac>0?m.units/ac:0;m.far=m.lotArea?m.gfa/m.lotArea:0;m.avgCov=m.lotArea?m.fp/m.lotArea:0;
+  m.avgLot=m.lots?m.lotArea/m.lots:0;m.parking=Math.ceil(m.units*P.parking-1e-9);
+  m.eff=eff;m.height=eff*P.storyH;m.removed=g.removed;
+  if(Math.floor(P.stories)>eff)warn.push('The height limit allows '+eff+' stories. Buildings use '+eff+'.');
+  var checks=[],openPct=open/(siteArea||1)*100;
+  function chk(label,val,lim,ok){checks.push({label:label,val:val,lim:lim,st:ok?'pass':'fail'})}
+  if(P.maxDens>0)chk('Density, maximum',fmt(m.density,1)+' du/ac','max '+P.maxDens,m.density<=P.maxDens+1e-9);
+  if(P.minDens>0)chk('Density, minimum',fmt(m.density,1)+' du/ac','min '+P.minDens,m.density>=P.minDens-1e-9);
+  if(P.minOpen>0)chk('Open space',fmt(openPct,1)+'%','min '+P.minOpen+'%',openPct>=P.minOpen-1e-9);
+  if(P.maxCov>0)chk('Lot coverage (highest lot)',fmt(m.maxCov*100,1)+'%','max '+P.maxCov+'%',m.maxCov*100<=P.maxCov+0.05);
+  if(P.maxFAR>0)chk('Floor area ratio',fmt(m.far,2),'max '+P.maxFAR,m.far<=P.maxFAR+0.005);
+  if(P.maxH>0)chk('Building height',fmt(m.height,0)+' ft','max '+P.maxH+' ft',m.height<=P.maxH+1e-9);
+  if(P.maxStories>0)chk('Stories',String(eff),'max '+P.maxStories,eff<=P.maxStories);
+  chk('Lot size and width',m.nonOk?m.nonOk+' fail':'all pass','',m.nonOk===0);
+  if(P.smallArea>0){var sp=m.lots?m.small/m.lots*100:0;chk('Lots under '+fmt(P.smallArea)+' sf',fmt(sp,0)+'%','max '+P.smallCap+'%',sp<=P.smallCap+1e-9)}
+  if(m.noEnv)checks.push({label:'Lots where no building fits',val:String(m.noEnv),lim:'',st:'warn'});
+  var fails=checks.filter(function(c){return c.st==='fail'}).length;
+  model={g:g,m:m,checks:checks,warn:warn,eff:eff,fails:fails};
+  return model;
+}
+
+/* ---------- rendering ---------- */
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()}
+function pts(poly){return poly.map(function(q){return q[0].toFixed(1)+','+q[1].toFixed(1)}).join(' ')}
+function pathOf(poly){return poly.map(function(q,i){return(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)}).join('')+'Z'}
+function mapMarkup(forExport){
+  var C={paper:css('--paper'),grid:css('--grid'),site:css('--site'),road:css('--road'),lotline:css('--lotline'),
+    lot:[css('--lotA'),css('--lotB'),css('--lotC')],bldg:css('--bldg'),bldgline:css('--bldgline'),env:css('--env'),handle:css('--handle'),bad:css('--bad'),ink:css('--ink')};
+  var s='',g=model.g,fs=vb.w/62,ns=' vector-effect="non-scaling-stroke"';
+  var minx=vb.x-vb.w,maxx=vb.x+vb.w*2,miny=vb.y-vb.h,maxy=vb.y+vb.h*2;
+  s+='<defs><pattern id="gm" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="'+C.grid+'" stroke-width="1"'+ns+'/></pattern></defs>';
+  s+='<rect x="'+minx+'" y="'+miny+'" width="'+(maxx-minx)+'" height="'+(maxy-miny)+'" fill="'+C.paper+'"/>';
+  s+='<rect x="'+minx+'" y="'+miny+'" width="'+(maxx-minx)+'" height="'+(maxy-miny)+'" fill="url(#gm)" pointer-events="none"/>';
+  var tracing=!forExport&&mode;
+  if(bg)s+='<image href="'+bg.url+'" x="'+P.bgX+'" y="'+P.bgY+'" width="'+P.bgW+'" height="'+(P.bgW*bg.h/bg.w)+'" opacity="'+(tracing?1:P.bgO/100)+'" pointer-events="none" preserveAspectRatio="none"/>';
+  if(tracing){
+    var tr=vb.w/110;
+    if(tpts.length>1)s+='<poly'+(mode==='trace'&&tpts.length>2?'gon':'line')+' points="'+pts(tpts)+'" fill="'+C.handle+'" fill-opacity="'+(mode==='trace'?0.15:0)+'" stroke="'+(mode==='scale'?C.bad:C.handle)+'" stroke-width="2"'+ns+' pointer-events="none"/>';
+    tpts.forEach(function(q){s+='<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+tr.toFixed(1)+'" fill="'+C.paper+'" stroke="'+(mode==='scale'?C.bad:C.handle)+'" stroke-width="2"'+ns+' pointer-events="none"/>'});
+    return s;
+  }
+  s+='<polygon points="'+pts(site)+'" fill="'+C.site+'" fill-opacity="'+(bg?0.45:1)+'" pointer-events="none"/>';
+  if(g.roadRings.length)s+='<path d="'+g.roadRings.map(pathOf).join('')+'" fill="'+C.road+'" fill-rule="evenodd" pointer-events="none"/>';
+  g.streets.forEach(function(st){s+='<polygon points="'+pts(st)+'" fill="'+C.road+'" pointer-events="none"/>'});
+  if(P.dLots)g.lots.forEach(function(l){
+    var bad=!l.b||!l.ok;
+    s+='<polygon points="'+pts(l.pts)+'" fill="'+C.lot[l.t]+'" stroke="'+(bad?C.bad:C.lotline)+'" stroke-width="1"'+(bad?' stroke-dasharray="4 2"':'')+ns+' pointer-events="none"/>';
+  });
+  if(P.dEnv)g.lots.forEach(function(l){if(l.env&&l.env.length>2)s+='<polygon points="'+pts(l.env)+'" fill="none" stroke="'+C.env+'" stroke-width="1" stroke-dasharray="3 2"'+ns+' pointer-events="none"/>'});
+  if(P.dBldg)g.lots.forEach(function(l){if(l.b)s+='<polygon points="'+pts(l.b.pts)+'" fill="'+C.bldg+'" stroke="'+C.bldgline+'" stroke-width="1"'+ns+' pointer-events="none"/>'});
+  s+='<polygon points="'+pts(site)+'" fill="none" stroke="'+C.handle+'" stroke-width="2"'+ns+' pointer-events="none"/>';
+  if(P.dDims){
+    var sg=area2(site)>0?1:-1,n=site.length;
+    site.forEach(function(a,i){
+      var b=site[(i+1)%n],e=edgeNormal(a,b);
+      if(e.L<vb.w*0.07)return;
+      var mx=(a[0]+b[0])/2-sg*e.nx*fs*1.3,my=(a[1]+b[1])/2-sg*e.ny*fs*1.3,ang=Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI;
+      if(ang>90)ang-=180;if(ang<-90)ang+=180;
+      s+='<text transform="translate('+mx.toFixed(1)+' '+my.toFixed(1)+') rotate('+ang.toFixed(1)+')" text-anchor="middle" dominant-baseline="middle" font-family="IBM Plex Mono,monospace" font-size="'+fs.toFixed(1)+'" fill="'+C.ink+'" stroke="'+C.paper+'" stroke-width="3" paint-order="stroke" pointer-events="none">'+fmt(e.L,0)+' ft</text>';
+    });
+  }
+  if(!forExport){
+    var r=vb.w/(site.length>14?130:85);
+    site.forEach(function(q,i){
+      var on=i===sel;
+      s+='<circle data-vi="'+i+'" cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(on?r*1.35:r).toFixed(1)+'" fill="'+(on?C.handle:C.paper)+'" stroke="'+C.handle+'" stroke-width="2"'+ns+' style="cursor:move"/>';
+    });
+  }
+  return s;
+}
+function renderMap(){
+  $('map').setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h);
+  $('map').innerHTML=mapMarkup(false);
+}
+function kpi(l,v,st){return'<div class="kpi '+st+'"><b>'+v+'</b><span>'+l+'</span></div>'}
+function renderResults(){
+  var m=model.m,T=P.types;
+  var rows=[
+    ['Parcel area',fmt(m.ac,2)+' ac ('+fmt(m.siteArea,0)+' sf)'],
+    ['Lots',fmt(m.lots)],['Units',fmt(m.units)],
+    ['Gross density',fmt(m.density,1)+' du/ac'],
+    ['Average lot',fmt(m.avgLot,0)+' sf']
+  ];
+  T.forEach(function(t,k){if(t.share>0)rows.push(['<span class="sw" style="background:var(--lot'+'ABC'[k]+')"></span> '+esc(t.name),fmt(m.byType[k])+' lots'])});
+  rows=rows.concat([
+    ['Average lot coverage',fmt(m.avgCov*100,1)+'%'],
+    ['Floor area ratio (lots)',fmt(m.far,2)],
+    ['Total floor area',fmt(m.gfa,0)+' sf'],
+    ['Street area',fmt(m.roadArea/(m.siteArea||1)*100,1)+'% of parcel'],
+    ['Open or unplatted',fmt(m.open/(m.siteArea||1)*100,1)+'% of parcel'],
+    ['Parking required',fmt(m.parking)+' spaces'],
+    ['Lots removed (too small)',fmt(m.removed)]
+  ]);
+  if(m.capCov)rows.push(['Buildings limited by coverage',fmt(m.capCov)]);
+  if(m.capFar)rows.push(['Buildings limited by FAR',fmt(m.capFar)]);
+  if(m.sapuCut)rows.push(['Lots limited by site area per unit',fmt(m.sapuCut)]);
+  $('res').innerHTML=rows.map(function(r){return'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>'}).join('');
+  $('checks').innerHTML='<div class="note" style="margin-top:8px">Zoning checks</div>'+model.checks.map(function(c){
+    return'<div class="check"><span class="pill '+c.st+'">'+(c.st==='pass'?'Pass':c.st==='fail'?'Fail':'Check')+'</span><span>'+c.label+'</span><span class="v">'+c.val+(c.lim?' / '+c.lim:'')+'</span></div>';
+  }).join('');
+  $('banner').innerHTML=model.warn.map(function(w){return'<div class="banner">'+esc(w)+'</div>'}).join('');
+  var dc=model.checks.filter(function(c){return c.label.indexOf('Density')===0}),dst=dc.length?(dc.some(function(c){return c.st==='fail'})?'fail':'pass'):'';
+  $('kpis').innerHTML=kpi('Units',fmt(m.units),'')+kpi('Lots',fmt(m.lots),'')+kpi('du/ac',fmt(m.density,1),dst)+
+    kpi('Checks',model.fails?model.fails+' fail':'pass',model.fails?'fail':'pass');
+  $('pinfo').innerHTML=(parcelMeta?'<b>'+esc(parcelMeta)+'</b><br>':'')+site.length+' corners, '+fmt(m.ac,2)+' ac'+(sel>=0?'. Corner '+(sel+1)+' selected.':'. Tap a corner to select it.');
+}
+var raf=0;
+function update(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;updateNow()})}
+function updateNow(){compute();renderMap();renderResults();persist()}
+var ptimer=0;
+function persist(){
+  clearTimeout(ptimer);
+  ptimer=setTimeout(function(){try{localStorage.setItem('syp2-state',JSON.stringify({P:P,site:site,meta:parcelMeta}))}catch(e){}},300);
+}
+
+/* ---------- controls ---------- */
+var FIELDS={
+  zoning:[['side','Side setback','ft',0,1],['streetSide','Street-side setback','ft',0,1],['maxH','Max height','ft',0,1],['maxStories','Max stories','',0,1],
+    ['minDens','Min density','du/ac',0,0.5],['maxDens','Max density','du/ac',0,0.5],['sapu','Site area per unit','sf',0,100],['minOpen','Min open space','%',0,1],
+    ['maxCov','Max lot coverage','%',0,1],['maxFAR','Max FAR','',0,0.05],['parking','Parking per unit','sp',0,0.25],['cornerExtra','Corner lot extra width','ft',0,1],
+    ['smallArea','Small lot means under','sf',0,100],['smallCap','Max share of small lots','%',0,5]],
+  layout:[['lotD','Lot depth','ft',40,5],['row','Street ROW width','ft',20,1],['radius','Street corner radius','ft',0,5],['angle','Street angle offset','deg',-180,5],['phase','Row offset','%',0,5]],
+  building:[['stories','Stories','',1,1],['storyH','Story height','ft',8,0.5]],
+  bg:[['bgW','Image width','ft',1,10],['bgX','Offset X','ft',-1e6,10],['bgY','Offset Y','ft',-1e6,10],['bgO','Opacity','%',0,5]]
+};
+var TFIELDS=[['share','Share of lots','%',0,5],['lotW','Lot width','ft',10,1],['minArea','Min lot area','sf',0,100],['minW','Min lot width','ft',0,1],
+  ['front','Front setback','ft',0,1],['rear','Rear setback','ft',0,1],['bw','Building width','ft',10,1],['bd','Building depth','ft',10,1],['upb','Units per building','',1,1]];
+function fieldHtml(f,attr){return'<div class="field"><label for="'+attr+'-'+f[0]+'">'+f[1]+'</label><div class="inwrap"><input type="number" inputmode="decimal" id="'+attr+'-'+f[0]+'" data-'+attr+'="'+f[0]+'" step="'+f[4]+'" min="'+f[3]+'"><span class="u">'+f[2]+'</span></div></div>'}
+function markCustom(){if(P.zone!=='custom'){P.zone='custom';$('district').value='custom';showNote()}}
+function buildFields(){
+  Object.keys(FIELDS).forEach(function(k){$('f-'+k).innerHTML=FIELDS[k].map(function(f){return fieldHtml(f,'p')}).join('')});
+  $('f-type').innerHTML=TFIELDS.map(function(f){return fieldHtml(f,'t')}).join('');
+  document.querySelectorAll('input[data-p]').forEach(function(inp){
+    inp.addEventListener('input',function(){
+      var v=parseFloat(inp.value);if(!isFinite(v))return;
+      var k=inp.dataset.p;P[k]=v;
+      if(FIELDS.zoning.some(function(f){return f[0]===k}))markCustom();
+      update();
+    });
+  });
+  document.querySelectorAll('input[data-t]').forEach(function(inp){
+    inp.addEventListener('input',function(){
+      var v=parseFloat(inp.value);if(!isFinite(v))return;
+      P.types[curT][inp.dataset.t]=v;markCustom();update();
+    });
+  });
+  $('t-name').addEventListener('input',function(e){P.types[curT].name=e.target.value||('Type '+'ABC'[curT]);renderTabs();update()});
+  $('t-attached').addEventListener('change',function(e){P.types[curT].attached=e.target.checked;markCustom();update()});
+}
+function renderTabs(){
+  $('ttabs').innerHTML=P.types.map(function(t,k){return'<button data-tab="'+k+'" class="'+(k===curT?'on':'')+'"><span class="sw" style="background:var(--lot'+'ABC'[k]+')"></span> '+esc(t.name)+(t.share>0?'':' (off)')+'</button>'}).join('');
+}
+$('ttabs').addEventListener('click',function(e){var b=e.target.closest('button[data-tab]');if(!b)return;curT=+b.dataset.tab;syncInputs()});
+function showNote(){var z=ZONES[P.zone];$('codenote').innerHTML=z?z.note+CODE_LINK:'Custom values. Pick a preset to load a zone, then adjust.'}
+function syncInputs(){
+  Object.keys(FIELDS).forEach(function(k){FIELDS[k].forEach(function(f){var el=$('p-'+f[0]);if(el&&document.activeElement!==el)el.value=P[f[0]]})});
+  var t=P.types[curT];
+  TFIELDS.forEach(function(f){var el=$('t-'+f[0]);if(el&&document.activeElement!==el)el.value=t[f[0]]});
+  if(document.activeElement!==$('t-name'))$('t-name').value=t.name;
+  $('t-attached').checked=!!t.attached;
+  $('c-interior').checked=!!P.interior;$('c-drop').checked=!!P.dropBad;
+  $('d-lots').checked=!!P.dLots;$('d-bldg').checked=!!P.dBldg;$('d-env').checked=!!P.dEnv;$('d-dims').checked=!!P.dDims;
+  $('district').value=ZONES[P.zone]?P.zone:'custom';
+  renderTabs();showNote();
+}
+[['c-interior','interior'],['c-drop','dropBad'],['d-lots','dLots'],['d-bldg','dBldg'],['d-env','dEnv'],['d-dims','dDims']].forEach(function(x){
+  $(x[0]).addEventListener('change',function(e){P[x[1]]=e.target.checked;update()});
+});
+$('district').addEventListener('change',function(e){
+  var z=ZONES[e.target.value];P.zone=e.target.value;
+  if(z){Object.assign(P,z.P);P.types=clone(z.types);curT=0}
+  syncInputs();update();
+});
+function setSite(p,meta){site=p;sel=-1;parcelMeta=meta||'';fit();updateNow()}
+$('shape').addEventListener('change',function(e){
+  var v=e.target.value;
+  ['dims','trace','file'].forEach(function(k){$('pn-'+k).hidden=v!==k});
+  if(v!=='trace'&&mode){mode=null;tpts=[];renderMap()}
+  if(SHAPES[v])setSite(SHAPES[v].map(function(p){return p.slice()}),'');
+});
+/* dimensions entry */
+function parseDims(text){
+  var lines=text.split(/\n+/).map(function(l){return l.trim()}).filter(Boolean),m,pts=[[0,0]],x=0,y=0;
+  if(lines.length===1&&(m=lines[0].match(/^([\d.]+)\s*(?:x|by|\u00d7)\s*([\d.]+)$/i))){var w=+m[1],d=+m[2];if(!(w>0&&d>0))throw new Error('Enter two positive numbers.');return{pts:[[0,0],[w,0],[w,d],[0,d]],gap:0}}
+  lines.forEach(function(l,i){
+    var az,dist;
+    m=l.match(/^([NS])\s*(\d+(?:\.\d+)?)\s*[\u00b0d]?\s*-?\s*(?:(\d+(?:\.\d+)?)\s*['\u2032m]?\s*-?\s*(?:(\d+(?:\.\d+)?)\s*["\u2033s]?\s*)?)?([EW])[\s,]+(\d+(?:\.\d+)?)/i);
+    if(m){
+      var a=+m[2]+(+m[3]||0)/60+(+m[4]||0)/3600,ns=m[1].toUpperCase(),ew=m[5].toUpperCase();
+      az=ns==='N'?(ew==='E'?a:360-a):(ew==='E'?180-a:180+a);dist=+m[6];
+    }else{
+      var q=l.split(/[\s,;]+/).filter(Boolean).map(parseFloat);
+      if(q.length<2||!isFinite(q[0])||!isFinite(q[1]))throw new Error('Line '+(i+1)+' is not a bearing and distance.');
+      dist=q[0];az=q[1];
+    }
+    var r=az*Math.PI/180;x+=dist*Math.sin(r);y-=dist*Math.cos(r);pts.push([x,y]);
+  });
+  if(pts.length<3)throw new Error('Enter at least 2 sides.');
+  var gap=Math.hypot(x,y);
+  if(gap<Math.max(2,0.01*polyArea(pts)**0.5)&&pts.length>3)pts.pop();
+  if(pts.length<3)throw new Error('Those sides do not enclose an area.');
+  return{pts:pts,gap:gap};
+}
+$('dims-go').addEventListener('click',function(){
+  try{
+    var r=parseDims($('dims').value);
+    setSite(r.pts,'Entered by dimensions');
+    $('dims-msg').textContent=r.gap<0.05?'Closed exactly.':'Closure gap '+fmt(r.gap,1)+' ft, closed with a straight line.';
+  }catch(e){$('dims-msg').textContent=e.message}
+});
+/* trace a site plan */
+function trMsg(t){$('tr-msg').textContent=t||(mode==='scale'?'Tap the two ends of the known distance. '+tpts.length+' of 2 set.':mode==='trace'?tpts.length+' corners placed. Tap the next corner, or Finish.':'')}
+function fitImage(){
+  if(!bg)return;
+  var r=svg.getBoundingClientRect(),asp=(r.width||800)/(r.height||600),w=P.bgW*1.1,h=P.bgW*bg.h/bg.w*1.15;
+  if(w/h<asp)w=h*asp;else h=w/asp;
+  vb={x:P.bgX+P.bgW/2-w/2,y:P.bgY+P.bgW*bg.h/bg.w/2-h/2+h*0.04,w:w,h:h};
+}
+$('tr-file').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){var im=new Image();im.onload=function(){bg={url:rd.result,w:im.naturalWidth,h:im.naturalHeight};P.bgX=0;P.bgY=0;syncInputs();mode='trace';tpts=[];fitImage();updateNow();trMsg('Image loaded. Set the scale next, or start tapping corners.')};im.src=rd.result};
+  rd.readAsDataURL(f);
+});
+$('tr-scale').addEventListener('click',function(){
+  if(!bg){trMsg('Load a site plan image first.');return}
+  if(!(parseFloat($('tr-len').value)>0)){trMsg('Type the known distance in feet first.');return}
+  mode='scale';tpts=[];renderMap();trMsg();
+});
+$('tr-start').addEventListener('click',function(){mode='trace';tpts=[];renderMap();trMsg()});
+$('tr-undo').addEventListener('click',function(){tpts.pop();renderMap();trMsg()});
+$('tr-done').addEventListener('click',function(){
+  if(mode!=='trace'||tpts.length<3){trMsg('Place at least 3 corners first.');return}
+  var q=tpts.map(function(t){return[Math.round(t[0]),Math.round(t[1])]});mode=null;tpts=[];
+  setSite(q,'Traced from site plan');trMsg('Parcel set from '+q.length+' corners. Drag corners to fine-tune.');
+});
+function tap(pt){
+  tpts.push([pt.x,pt.y]);
+  if(mode==='scale'&&tpts.length===2){
+    var L=parseFloat($('tr-len').value),a=tpts[0],b=tpts[1],dw=Math.hypot(a[0]-b[0],a[1]-b[1]);
+    if(dw>0&&L>0){var f=L/dw;P.bgX=a[0]-(a[0]-P.bgX)*f;P.bgY=a[1]-(a[1]-P.bgY)*f;P.bgW*=f;syncInputs();mode='trace';tpts=[];fitImage();updateNow();trMsg('Scale set: the image is '+fmt(P.bgW,0)+' ft wide. Now tap each parcel corner in order.');return}
+    tpts=[];
+  }
+  renderMap();trMsg();
+}
+$('v-add').addEventListener('click',function(){
+  var n=site.length,i=sel,best=0;
+  if(i<0)site.forEach(function(a,k){var b=site[(k+1)%n],L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L>best){best=L;i=k}});
+  var a=site[i],b=site[(i+1)%n];
+  site.splice(i+1,0,[(a[0]+b[0])/2,(a[1]+b[1])/2]);sel=i+1;updateNow();
+});
+$('v-del').addEventListener('click',function(){if(sel<0||site.length<=3)return;site.splice(sel,1);sel=-1;updateNow()});
+
+/* ---------- GIS import ---------- */
+function simplify(p,tol){
+  function dp(a,b){
+    if(b<=a+1)return[];
+    var A=p[a],B=p[b],dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy)||1,md=0,mi=-1,i,d;
+    for(i=a+1;i<b;i++){d=Math.abs((p[i][0]-A[0])*dy-(p[i][1]-A[1])*dx)/L;if(d>md){md=d;mi=i}}
+    if(md<=tol)return[];
+    return dp(a,mi).concat([mi],dp(mi,b));
+  }
+  if(p.length<5)return p;
+  var far=0,fi=0,i;for(i=1;i<p.length;i++){var d=Math.hypot(p[i][0]-p[0][0],p[i][1]-p[0][1]);if(d>far){far=d;fi=i}}
+  var idx=[0].concat(dp(0,fi),[fi]),q=p.concat([p[0]]),save=p;p=q;idx=idx.concat(dp(fi,q.length-1));p=save;
+  return idx.map(function(k){return q[k]});
+}
+function parseGeo(text,projUnits){
+  var j=JSON.parse(text),raw=[],wkid=null;
+  function addRings(rings,props){if(rings&&rings.length)raw.push({ring:rings.reduce(function(a,b){return Math.abs(area2(b))>Math.abs(area2(a))?b:a}),props:props||{}})}
+  (function walk(o,props){
+    if(!o)return;
+    if(Array.isArray(o)){o.forEach(function(x){walk(x,props)});return}
+    if(o.spatialReference&&wkid===null)wkid=o.spatialReference.latestWkid||o.spatialReference.wkid||null;
+    if(o.type==='FeatureCollection')walk(o.features);
+    else if(o.type==='Feature')walk(o.geometry,o.properties);
+    else if(o.type==='GeometryCollection')walk(o.geometries,props);
+    else if(o.type==='Polygon')addRings(o.coordinates,props);
+    else if(o.type==='MultiPolygon')o.coordinates.forEach(function(pg){addRings(pg,props)});
+    else if(o.rings)addRings(o.rings,props);
+    else if(o.features)o.features.forEach(function(f){if(f.geometry&&f.geometry.rings)addRings(f.geometry.rings,f.attributes);else walk(f)});
+    else if(o.geometry)walk(o.geometry,o.attributes||o.properties);
+  })(j);
+  if(!raw.length)throw new Error('No polygon found');
+  var first=raw[0].ring[0],lonlat=Math.abs(first[0])<=180&&Math.abs(first[1])<=90;
+  var merc=!lonlat&&(wkid===3857||wkid===102100||wkid===102113);
+  var Rm=6378137,D2R=Math.PI/180;
+  function ll(q){return merc?[q[0]/Rm/D2R,(2*Math.atan(Math.exp(q[1]/Rm))-Math.PI/2)/D2R]:q}
+  var o0=ll(first),kx=1,ky=1;
+  if(lonlat||merc){
+    var ph=o0[1]*D2R;
+    ky=(111132.92-559.82*Math.cos(2*ph)+1.175*Math.cos(4*ph))*3.28084;
+    kx=(111412.84*Math.cos(ph)-93.5*Math.cos(3*ph)+0.118*Math.cos(5*ph))*3.28084;
+  }else{kx=ky=projUnits==='m'?3.28084:1;o0=first}
+  return raw.map(function(r,i){
+    var ring=r.ring.map(function(q){var g=(lonlat||merc)?ll(q):q;return[(g[0]-o0[0])*kx,-(g[1]-o0[1])*ky]});
+    if(ring.length>3&&Math.hypot(ring[0][0]-ring[ring.length-1][0],ring[0][1]-ring[ring.length-1][1])<0.01)ring.pop();
+    ring=simplify(ring,1.5);
+    var pr={},k;for(k in r.props)pr[k.toLowerCase()]=r.props[k];
+    var apn=pr.apn_txt||pr.apn||pr.parcelid||pr.apn_id||pr.apn12||pr.name||'';
+    return{ring:ring,label:(apn?'APN '+apn:'Parcel '+(i+1))+', '+fmt(polyArea(ring)/43560,2)+' ac'+(pr.zones?', zone '+pr.zones:'')};
+  }).filter(function(f){return f.ring.length>=3});
+}
+function parseDxf(text,units){
+  var L=text.split(/\r?\n/),k=units==='m'?3.28084:1,polys=[],cur=null,i,code,val,px=null,inPoly=false;
+  function close(){if(cur&&cur.length>=3)polys.push(cur);cur=null}
+  for(i=0;i+1<L.length;i+=2){
+    code=parseInt(L[i],10);val=L[i+1].trim();
+    if(code===0){
+      if(val==='LWPOLYLINE'){close();cur=[];inPoly=false}
+      else if(val==='POLYLINE'){close();cur=[];inPoly=true}
+      else if(val==='VERTEX'&&inPoly){}
+      else{close();inPoly=false}
+      px=null;
+    }else if(cur&&code===10)px=parseFloat(val);
+    else if(cur&&code===20&&px!==null){cur.push([px,parseFloat(val)]);px=null}
+  }
+  close();
+  if(!polys.length)throw new Error('No polyline found in the DXF. Draw the boundary as one closed polyline.');
+  var o=polys[0][0];
+  return polys.map(function(pl){
+    var ring=pl.map(function(q){return[(q[0]-o[0])*k,-(q[1]-o[1])*k]});
+    if(ring.length>3&&Math.hypot(ring[0][0]-ring[ring.length-1][0],ring[0][1]-ring[ring.length-1][1])<0.01)ring.pop();
+    return ring;
+  }).filter(function(r){return r.length>=3&&polyArea(r)>1}).sort(function(a,b){return polyArea(b)-polyArea(a)}).slice(0,40)
+   .map(function(ring,n){return{ring:ring,label:'Polyline '+(n+1)+', '+fmt(polyArea(ring)/43560,2)+' ac'}});
+}
+function importText(t){
+  t=(t||'').trim();if(!t)return;
+  var msg='';
+  try{
+    var dxf=/ENTITIES/.test(t)&&/POLYLINE/.test(t);
+    if(dxf||t[0]==='{'||t[0]==='['){
+      feats=dxf?parseDxf(t,$('units').value):parseGeo(t,$('units').value);
+      if(!feats.length)throw new Error('No polygon found');
+      if(feats.length===1){$('featbox').hidden=true;setSite(feats[0].ring,feats[0].label);return}
+      $('featsel').innerHTML=feats.map(function(f,i){return'<option value="'+i+'">'+esc(f.label)+'</option>'}).join('')+'<option value="all">Combine all '+feats.length+' parcels into one site</option>';
+      $('featbox').hidden=false;setSite(feats[0].ring,feats[0].label);return;
+    }
+    var p2=t.split(/\n+/).map(function(l){return l.split(/[\s,;]+/).filter(Boolean).map(parseFloat).slice(0,2)}).filter(function(m){return m.length===2&&isFinite(m[0])&&isFinite(m[1])});
+    if(p2.length<3)throw new Error('Need at least 3 corners');
+    $('featbox').hidden=true;setSite(p2,'');return;
+  }catch(e){msg=/JSON|token|position/i.test(String(e.message))?'That text is not valid JSON. Copy the whole response and paste again.':e.message}
+  $('pinfo').textContent='Import failed. '+msg;
+}
+$('paste-go').addEventListener('click',function(){importText($('paste').value)});
+['gis-file','shape-file'].forEach(function(id){$(id).addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  var rd=new FileReader();rd.onload=function(){importText(String(rd.result))};rd.readAsText(f);
+})});
+$('feat-use').addEventListener('click',function(){
+  var v=$('featsel').value;
+  if(v==='all'){
+    var c=new CL.Clipper(),out=new CL.Paths();
+    c.AddPaths(offC(feats.map(function(f){return orientC(toC(f.ring))}),0.75,false),CL.PolyType.ptSubject,true);
+    c.Execute(CL.ClipType.ctUnion,out,CL.PolyFillType.pftNonZero,CL.PolyFillType.pftNonZero);
+    var big=largest(offC(out,-0.75,false));
+    if(big)setSite(simplify(fromC(big),1.5),feats.length+' parcels combined');
+  }else setSite(feats[+v].ring.map(function(q){return q.slice()}),feats[+v].label);
+});
+var COUNTY_URL='https://services2.arcgis.com/bYBANhmQGwSSLC0l/ArcGIS/rest/services/Public_Parcels/FeatureServer/0/query';
+function buildQuery(){
+  var base=($('q-url').value||COUNTY_URL).trim().replace(/\?.*$/,''),apn=$('q-apn').value.replace(/[^0-9]/g,''),ll=$('q-ll').value.split(/[\s,]+/).filter(Boolean).map(parseFloat);
+  if(!/\/query$/i.test(base))base=base.replace(/\/$/,'')+'/query';
+  var tail='&outFields=*&returnGeometry=true&outSR=4326&f=geojson',q='',msg='';
+  if(ll.length===2&&isFinite(ll[0])&&isFinite(ll[1])){
+    var lat=ll[0],lon=ll[1];if(Math.abs(lat)>90){lat=ll[1];lon=ll[0]}
+    q='?geometry='+lon+','+lat+'&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects';msg='Query by point.';
+  }else if(apn.length>=6){
+    var d=apn.slice(0,3)+'-'+apn.slice(3,6)+'-'+apn.slice(6,9);
+    q='?where='+encodeURIComponent("APN_TXT LIKE '"+apn+"%' OR APN_TXT LIKE '"+d+"%' OR PARCELID LIKE '"+apn+"%' OR PARCELID LIKE '"+d+"%'");
+    msg='Query by APN. The field names fit the county layer.';
+  }else msg='Enter an APN or a point first.';
+  $('q-link').href=q?base+q+tail:'#';$('q-msg').textContent=msg;
+}
+['q-apn','q-ll','q-url'].forEach(function(id){$(id).addEventListener('input',buildQuery)});
+$('q-link').addEventListener('click',function(e){if($('q-link').getAttribute('href')==='#')e.preventDefault()});
+
+/* background image */
+$('bg-file').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0];if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){var im=new Image();im.onload=function(){bg={url:rd.result,w:im.naturalWidth,h:im.naturalHeight};update()};im.src=rd.result};
+  rd.readAsDataURL(f);
+});
+$('bg-clear').addEventListener('click',function(){bg=null;$('bg-file').value='';update()});
+
+/* scenario copy / load */
+$('btn-copy').addEventListener('click',function(){
+  var txt=JSON.stringify({P:P,site:site,meta:parcelMeta}),b=$('btn-copy');
+  function done(ok){b.textContent=ok?'Copied':'Copy failed';setTimeout(function(){b.textContent='Copy scenario'},1400)}
+  try{navigator.clipboard.writeText(txt).then(function(){done(true)},function(){done(false)})}catch(e){done(false)}
+});
+$('scn-go').addEventListener('click',function(){
+  try{
+    var o=JSON.parse($('scn').value);
+    if(!o.P||!o.site||o.site.length<3)throw new Error('bad');
+    P=normP(o.P);curT=0;syncInputs();setSite(o.site,o.meta||'');
+  }catch(e){$('scn').value='';$('scn').placeholder='That was not a valid scenario. Paste the text from Copy scenario.'}
+});
+
+/* ---------- optimizer ---------- */
+var optBusy=false;
+$('opt-go').addEventListener('click',function(){
+  if(optBusy)return;optBusy=true;$('opt-go').disabled=true;
+  var base={angle:P.angle,lotD:P.lotD,phase:P.phase},before=compute().m.units,minD=40;
+  P.types.forEach(function(t){if(t.share>0&&t.lotW>0)minD=Math.max(minD,Math.ceil(t.minArea/t.lotW/5)*5)});
+  var depths=[],angles=[],d,a,cands=[];
+  for(d=Math.max(minD,base.lotD-20);d<=Math.max(minD,base.lotD)+20;d+=5)depths.push(d);
+  for(a=0;a<180;a+=P.interior?15:180)angles.push(a);
+  depths.forEach(function(dd){angles.forEach(function(aa){(P.interior?[0,33,66]:[0]).forEach(function(ph){cands.push({lotD:dd,angle:aa,phase:ph})})})});
+  var best=null,i=0;
+  function better(m,c){return!best||m.fails<best.fails||(m.fails===best.fails&&m.m.units>best.units)}
+  function step(){
+    var end=Math.min(cands.length,i+5);
+    for(;i<end;i++){Object.assign(P,cands[i]);var m=compute();if(better(m,cands[i]))best={fails:m.fails,units:m.m.units,c:cands[i]}}
+    $('opt-msg').textContent='Testing layouts, '+Math.round(i/cands.length*100)+'%';
+    if(i<cands.length){setTimeout(step,0);return}
+    Object.assign(P,best.c);syncInputs();updateNow();
+    $('opt-msg').textContent='Best of '+cands.length+' layouts: '+best.units+' units (was '+before+') at '+best.c.lotD+' ft depth, '+best.c.angle+' deg'+(best.fails?'. '+best.fails+' zoning check'+(best.fails>1?'s':'')+' still fail.':'. All checks pass.');
+    optBusy=false;$('opt-go').disabled=false;
+  }
+  step();
+});
+
+/* ---------- pan, zoom, drag ---------- */
+var svg=$('map'),ptrs=new Map(),drag=null,lastDist=0;
+function clientToWorld(cx,cy){var pt=svg.createSVGPoint();pt.x=cx;pt.y=cy;return pt.matrixTransform(svg.getScreenCTM().inverse())}
+function worldPerPx(){var m=svg.getScreenCTM();return m?1/m.a:1}
+function zoomAt(f,cx,cy){
+  var p=clientToWorld(cx,cy);
+  vb.x=p.x-(p.x-vb.x)*f;vb.y=p.y-(p.y-vb.y)*f;vb.w*=f;vb.h*=f;renderMap();
+}
+function fit(){
+  var r=svg.getBoundingClientRect(),asp=(r.width||800)/(r.height||600);
+  var xs=site.map(function(p){return p[0]}),ys=site.map(function(p){return p[1]});
+  var x0=Math.min.apply(null,xs),x1=Math.max.apply(null,xs),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys);
+  var w=(x1-x0)*1.25||100,h=(y1-y0)*1.3||100;
+  if(w/h<asp)w=h*asp;else h=w/asp;
+  vb={x:(x0+x1)/2-w/2,y:(y0+y1)/2-h/2+h*0.05,w:w,h:h};
+}
+svg.addEventListener('pointerdown',function(e){
+  try{svg.setPointerCapture(e.pointerId)}catch(x){}
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){var a=Array.from(ptrs.values());lastDist=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);drag=null;return}
+  var t=e.target;
+  if(!mode&&t&&t.getAttribute&&t.getAttribute('data-vi')!==null){sel=+t.getAttribute('data-vi');drag={type:'v',i:sel};renderResults();renderMap()}
+  else drag={type:'pan',cx:e.clientX,cy:e.clientY,vb:{x:vb.x,y:vb.y},s:worldPerPx()};
+});
+svg.addEventListener('pointermove',function(e){
+  if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){
+    var a=Array.from(ptrs.values()),d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+    if(lastDist>0&&d>0)zoomAt(lastDist/d,(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2);
+    lastDist=d;return;
+  }
+  if(!drag)return;
+  if(drag.type==='v'){var p=clientToWorld(e.clientX,e.clientY);site[drag.i]=[Math.round(p.x),Math.round(p.y)];update()}
+  else{vb.x=drag.vb.x-(e.clientX-drag.cx)*drag.s;vb.y=drag.vb.y-(e.clientY-drag.cy)*drag.s;svg.setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h)}
+});
+function endPtr(e){
+  ptrs.delete(e.pointerId);if(ptrs.size<2)lastDist=0;
+  if(ptrs.size===0){
+    if(drag&&drag.type==='pan'){
+      if(mode&&e.type==='pointerup'&&Math.hypot(e.clientX-drag.cx,e.clientY-drag.cy)<7)tap(clientToWorld(e.clientX,e.clientY));
+      else renderMap();
+    }
+    drag=null;
+  }
+}
+svg.addEventListener('pointerup',endPtr);svg.addEventListener('pointercancel',endPtr);
+svg.addEventListener('wheel',function(e){e.preventDefault();zoomAt(e.deltaY>0?1.12:1/1.12,e.clientX,e.clientY)},{passive:false});
+function zoomCenter(f){var r=svg.getBoundingClientRect();zoomAt(f,r.left+r.width/2,r.top+r.height/2)}
+$('zin').addEventListener('click',function(){zoomCenter(1/1.25)});
+$('zout').addEventListener('click',function(){zoomCenter(1.25)});
+$('zfit').addEventListener('click',function(){fit();renderMap()});
+window.addEventListener('resize',function(){renderMap()});
+try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){update()})}catch(e){}
+try{new MutationObserver(function(){update()}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']})}catch(e){}
+
+/* ---------- exports (browser downloads) ---------- */
+function svgString(){
+  var w=1600,h=Math.round(w*vb.h/vb.w);
+  return'<svg xmlns="http://www.w3.org/2000/svg" viewBox="'+vb.x+' '+vb.y+' '+vb.w+' '+vb.h+'" width="'+w+'" height="'+h+'">'+mapMarkup(true)+'</svg>';
+}
+function offer(filename,data){
+  var blob=data instanceof Blob?data:new Blob([data],{type:/\.svg$/.test(filename)?'image/svg+xml':'text/csv'});
+  var url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url)},1000);
+}
+$('btn-svg').addEventListener('click',function(){offer('site-plan.svg',svgString())});
+$('btn-png').addEventListener('click',function(){
+  var str=svgString(),w=1600,h=Math.round(w*vb.h/vb.w);
+  var url=URL.createObjectURL(new Blob([str],{type:'image/svg+xml'})),im=new Image();
+  im.onload=function(){
+    var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);
+    URL.revokeObjectURL(url);c.toBlob(function(b){if(b)offer('site-plan.png',b)},'image/png');
+  };
+  im.src=url;
+});
+$('btn-csv').addEventListener('click',function(){
+  var rows=['lot,type,location,area_sf,width_ft,meets_min,units,building_footprint_sf,coverage_pct,limited_by'];
+  model.g.lots.forEach(function(l){
+    var b=l.b;
+    rows.push([l.id,'"'+P.types[l.t].name.replace(/"/g,'')+'"',l.kind,l.area.toFixed(0),l.width.toFixed(1),l.ok?'yes':'no',l.units,
+      b?b.fp.toFixed(0):'',b?(b.fp/l.area*100).toFixed(1):'',b?(b.capped||''):(l.reason||'')].join(','));
+  });
+  offer('lot-table.csv',rows.join('\n'));
+});
+
+/* ---------- boot ---------- */
+if(!CL){$('banner').innerHTML='<div class="banner">The geometry library did not load, so no layout can be drawn. Reload the page.</div>';return}
+buildFields();syncInputs();$('q-url').value=COUNTY_URL;buildQuery();
+window.__syp={importText:importText,parseDims:parseDims,parseDxf:parseDxf,get model(){return model}};
+requestAnimationFrame(function(){fit();updateNow()});
+})();
+</script>
+</body>
+</html>
